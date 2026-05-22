@@ -235,19 +235,19 @@
   // ---------- Initial state ----------
   // This is the same default config the underlying module ships with, mirrored
   // here so the editor controls it explicitly.
-  const gradient = new MeshGradient({
-    bgColor: '#f7f5f1',
+  const defaultConfig = {
+    bgColor: '#0a0a14',
     introDuration: 1800,
     outroDuration: 1400,
-    floatAmplitude: 0.030,
+    floatAmplitude: 0.06,
     floatSpeed: 0.00018,
     nodes: [
-      { color: '#F3DDBE', position: [0.130, 1.020], radius: 0.120, introFrom: [0.150, 1.030], outroTo: [0.150, 1.030] },
-      { color: '#25dce9', position: [-0.080, 0.830], radius: 0.260, introFrom: [-0.080, 0.830], outroTo: [-0.080, 0.830] },
-      { color: '#263759', position: [0.007, 0.971], radius: 0.500, introFrom: [0.010, 0.970], outroTo: [0.010, 0.970] },
-      { color: '#f7f5f1', position: [0.127, 0.797], radius: 0.100, introFrom: [0.500, -0.300], outroTo: [0.500, 1.300] },
+      { color: '#FF6B9D', position: [0.20, 0.30], radius: 0.55, introFrom: [-0.3, 0.30], outroTo: [-0.3, 0.30] },
+      { color: '#C147E9', position: [0.75, 0.25], radius: 0.55, introFrom: [0.75, -0.3], outroTo: [0.75, -0.3] },
+      { color: '#FFA45B', position: [0.85, 0.75], radius: 0.55, introFrom: [1.3, 0.75],  outroTo: [1.3, 0.75]  },
+      { color: '#3D5AFE', position: [0.30, 0.80], radius: 0.55, introFrom: [0.30, 1.3],  outroTo: [0.30, 1.3]  },
     ],
-  });
+  };
 
   // We deep-clone so resets work cleanly.
   let config = structuredClone(defaultConfig);
