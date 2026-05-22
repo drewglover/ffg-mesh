@@ -269,6 +269,7 @@
 
 <div id="bottom-bar">
   <button class="btn primary" id="export-btn">Export config</button>
+  <button class="btn" id="share-btn" title="Copy a shareable URL for this gradient">Copy share link</button>
   <button class="btn" id="reset-btn">Reset</button>
 </div>
 
@@ -774,11 +775,139 @@ gradient.playIntro();`;
     renderWireframe();
   });
 
+  // ---------- URL-hash sharing ----------
+  // Pack the full config into the location hash so any URL captures the
+  // gradient. Uses native CompressionStream (deflate-raw) + base64url —
+  // no dependencies, ~1KB encoded for a typical config. We serialize ALL
+  // fields explicitly (no relying on defaults) so loading a shared URL on
+  // a future version reproduces the exact saved state.
+
+  // Compact key names just to shave bytes. The semantic shape matches what
+  // expandConfig() rebuilds before handing it to MeshGradient.
+  function compactConfig(c) {
+    return {
+      bg: c.bgColor,
+      i: c.introDuration,
+      o: c.outroDuration,
+      a: c.floatAmplitude,
+      s: c.floatSpeed,
+      r: c.rows,
+      cols: c.cols,
+      v: c.vertices.map(v => ({
+        p: v.position,
+        c: v.color,
+        h: [v.handles.e, v.handles.w, v.handles.n, v.handles.s],
+        i: v.introFrom,
+        o: v.outroTo,
+      })),
+    };
+  }
+  function expandConfig(d) {
+    return {
+      bgColor: d.bg,
+      introDuration:  d.i,
+      outroDuration:  d.o,
+      floatAmplitude: d.a,
+      floatSpeed:     d.s,
+      rows: d.r,
+      cols: d.cols,
+      vertices: d.v.map(v => ({
+        position: v.p,
+        color: v.c,
+        handles: { e: v.h[0], w: v.h[1], n: v.h[2], s: v.h[3] },
+        introFrom: v.i,
+        outroTo:   v.o,
+      })),
+    };
+  }
+
+  async function deflateBase64Url(str) {
+    const stream = new Blob([str]).stream().pipeThrough(new CompressionStream('deflate-raw'));
+    const buf = await new Response(stream).arrayBuffer();
+    // btoa expects a binary string. Chunked to dodge call-stack limits on huge inputs,
+    // though for our payload sizes it's fine in one shot.
+    let bin = '';
+    const bytes = new Uint8Array(buf);
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  async function inflateBase64Url(b64u) {
+    let b64 = b64u.replace(/-/g, '+').replace(/_/g, '/');
+    while (b64.length % 4) b64 += '=';
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    return new Response(stream).text();
+  }
+
+  async function buildShareUrl() {
+    const encoded = await deflateBase64Url(JSON.stringify(compactConfig(config)));
+    return location.origin + location.pathname + '#g=' + encoded;
+  }
+
+  // On boot: if the URL has #g=..., decode it and use that as the initial state.
+  // Bad/corrupted hashes are ignored — we just fall through to defaults.
+  async function loadFromHash() {
+    const m = (location.hash || '').match(/g=([A-Za-z0-9_\-]+)/);
+    if (!m) return false;
+    try {
+      const json = await inflateBase64Url(m[1]);
+      const data = JSON.parse(json);
+      config = expandConfig(data);
+      return true;
+    } catch (e) {
+      console.warn('Failed to decode gradient from URL:', e);
+      return false;
+    }
+  }
+
+  // Auto-sync the hash whenever state changes so the address bar always
+  // reflects the current gradient (copy-from-URL-bar workflow). Debounced
+  // to avoid thrashing during drags. replaceState avoids back-button noise.
+  let _hashTimer = null;
+  function scheduleHashUpdate() {
+    clearTimeout(_hashTimer);
+    _hashTimer = setTimeout(async () => {
+      try {
+        const url = await buildShareUrl();
+        const hash = '#' + url.split('#')[1];
+        history.replaceState(null, '', hash);
+      } catch (e) { /* ignore */ }
+    }, 400);
+  }
+
+  // Wrap rebuildGradient so every state change triggers a hash refresh.
+  const _origRebuild = rebuildGradient;
+  rebuildGradient = function(...args) {
+    _origRebuild.apply(this, args);
+    scheduleHashUpdate();
+  };
+
+  function bindShare() {
+    $('share-btn').addEventListener('click', async () => {
+      const btn = $('share-btn');
+      try {
+        const url = await buildShareUrl();
+        await navigator.clipboard.writeText(url);
+        const orig = btn.textContent;
+        btn.textContent = 'Copied — paste anywhere';
+        setTimeout(() => { btn.textContent = orig; }, 1600);
+      } catch (e) {
+        console.error(e);
+        btn.textContent = 'Copy failed';
+        setTimeout(() => { btn.textContent = 'Copy share link'; }, 1600);
+      }
+    });
+  }
+
   // ---------- boot ----------
+  await loadFromHash();
   syncGlobalInputs();
   bindGlobalInputs();
   bindDetailInputs();
   bindExport();
+  bindShare();
   renderHandles();
   renderWireframe();
   renderGridPicker();
