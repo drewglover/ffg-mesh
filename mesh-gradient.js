@@ -139,11 +139,23 @@ export class MeshGradient {
 
   _setupCanvas(container) {
     this.canvas = document.createElement('canvas');
-    this.canvas.style.cssText = `
-      position: fixed; inset: 0; width: 100vw; height: 100vh;
-      z-index: -1; pointer-events: none; display: block;
-    `;
-    (container || document.body).appendChild(this.canvas);
+    this.container = container || document.body;
+    this._isFullViewport = !container;
+    // When mounted into a specific container, fill that container. When
+    // attached to document.body with no container, fall back to the legacy
+    // full-viewport behavior (useful for "just drop a gradient on the page").
+    if (this._isFullViewport) {
+      this.canvas.style.cssText = `
+        position: fixed; inset: 0; width: 100vw; height: 100vh;
+        z-index: -1; pointer-events: none; display: block;
+      `;
+    } else {
+      this.canvas.style.cssText = `
+        position: absolute; inset: 0; width: 100%; height: 100%;
+        pointer-events: none; display: block;
+      `;
+    }
+    this.container.appendChild(this.canvas);
   }
 
   _setupGL() {
@@ -228,8 +240,19 @@ export class MeshGradient {
 
   _resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    this.canvas.width  = window.innerWidth  * dpr;
-    this.canvas.height = window.innerHeight * dpr;
+    let w, h;
+    if (this._isFullViewport) {
+      w = window.innerWidth;
+      h = window.innerHeight;
+    } else {
+      const r = this.container.getBoundingClientRect();
+      // Container may not be laid out yet on first call — fall back to 1x1
+      // and rely on a follow-up resize once layout settles.
+      w = Math.max(1, r.width);
+      h = Math.max(1, r.height);
+    }
+    this.canvas.width  = w * dpr;
+    this.canvas.height = h * dpr;
     this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
   }
 
