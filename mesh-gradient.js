@@ -97,7 +97,7 @@ export class MeshGradient {
     this.cols = options.cols ?? 4;
     this.subdivisions = options.subdivisions ?? 20; // per-patch tessellation density
 
-    this.bgColor = options.bgColor || '#0a0a14';
+    this.bgColor = options.bgColor || '#f7f5f1';
     this.introDuration  = options.introDuration  ?? 1800;
     this.outroDuration  = options.outroDuration  ?? 1400;
     this.floatAmplitude = options.floatAmplitude ?? 0.025;
