@@ -6,18 +6,47 @@
 <title>Mesh gradient editor</title>
 <style>
   html, body { margin: 0; padding: 0; height: 100vh; overflow: hidden;
-    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; color: white; }
+    font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; color: white;
+    background: #06070b; }
 
-  /* Solid backdrop the gradient canvas composites over. */
-  #bg-color-source { position: fixed; inset: 0; z-index: -2; background: #0a0a14; }
+  /* Page backdrop — deliberately darker than the canvas bgColor so the
+     canvas frame is visible. Not tied to the gradient bgColor anymore. */
+  #bg-color-source { position: fixed; inset: 0; z-index: -2; background: #06070b; }
 
-  /* SVG wireframe sits below the drag handles. */
-  #wireframe { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+  /* Stage holds the centered canvas-frame. Sits to the left of the sidebar. */
+  #stage {
+    position: fixed; top: 0; left: 0; right: 360px; bottom: 0;
+    display: flex; align-items: center; justify-content: center;
+    padding: 80px 80px;
+    z-index: 0;
+  }
+  /* The bounded gradient canvas. WebGL canvas mounts inside this and fills it.
+     Sized at 50% of the stage so introFrom positions at -0.3 / 1.3 land
+     comfortably inside the viewport buffer instead of off-screen. */
+  #canvas-frame {
+    position: relative;
+    width: 50%; height: auto;
+    aspect-ratio: 16 / 10;
+    max-width: 820px; max-height: calc(100vh - 220px);
+    border-radius: 14px; overflow: hidden;
+    box-shadow:
+      0 30px 80px rgba(0,0,0,0.55),
+      0 12px 28px rgba(0,0,0,0.45),
+      0 0 0 1px rgba(255,255,255,0.06);
+  }
+
+  /* SVG wireframe spans full viewport so off-canvas nodes/handles render
+     in the buffer area around the canvas-frame. */
+  #wireframe { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
   #wireframe .mesh-edge { fill: none; stroke: rgba(255,255,255,0.35); stroke-width: 1.5; }
   #wireframe .handle-line { fill: none; stroke: rgba(255,255,255,0.5); stroke-width: 1; stroke-dasharray: 3 3; }
+  #wireframe .frame-bounds {
+    fill: none; stroke: rgba(255,255,255,0.06); stroke-width: 1; stroke-dasharray: 4 4;
+  }
 
-  /* Drag layer captures node + handle drags. */
-  #drag-layer { position: fixed; inset: 0; z-index: 1; pointer-events: none; }
+  /* Drag layer captures node + handle drags. Also full-viewport so off-bounds
+     handles remain interactive. */
+  #drag-layer { position: fixed; inset: 0; z-index: 2; pointer-events: none; }
 
   .node-handle {
     position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px;
@@ -43,26 +72,22 @@
   .tangent-handle:hover { transform: scale(1.25); }
   .tangent-handle.dragging { cursor: grabbing; transform: scale(1.35); background: #ffe45b; }
 
-  /* Side panel */
+  /* Sidebar — anchored full-height on the right edge. */
   #panel {
-    position: fixed; top: 16px; right: 16px; bottom: 16px; width: 340px; z-index: 10;
-    background: rgba(20, 20, 30, 0.85); backdrop-filter: blur(20px);
-    border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
+    position: fixed; top: 0; right: 0; bottom: 0; width: 360px; z-index: 10;
+    background: #11131b;
+    border-left: 1px solid rgba(255,255,255,0.06);
     display: flex; flex-direction: column; overflow: hidden;
   }
-  #panel.collapsed { width: 44px; }
   #panel-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,0.08); flex-shrink: 0;
+    padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.06); flex-shrink: 0;
   }
   #panel-title { font-size: 13px; font-weight: 500; letter-spacing: 0.02em; }
-  #panel.collapsed #panel-title, #panel.collapsed #panel-body { display: none; }
-  #collapse-btn {
-    background: none; border: none; color: white; cursor: pointer; padding: 4px 8px;
-    font-size: 16px; opacity: 0.6;
+  #panel-body { padding: 14px 18px 20px; overflow-y: auto; flex: 1; }
+  #panel-footer {
+    padding: 12px 18px; border-top: 1px solid rgba(255,255,255,0.06); flex-shrink: 0;
+    display: flex; gap: 8px; flex-wrap: wrap;
   }
-  #collapse-btn:hover { opacity: 1; }
-  #panel-body { padding: 12px 16px 20px; overflow-y: auto; flex: 1; }
 
   .section { margin-bottom: 18px; }
   .section-title {
@@ -153,12 +178,6 @@
   }
   .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
 
-  #bottom-bar {
-    position: fixed; left: 16px; bottom: 16px; z-index: 10; display: flex; gap: 8px;
-    background: rgba(20,20,30,0.85); backdrop-filter: blur(20px);
-    border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 8px;
-  }
-
   .toggle-row { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 6px; }
   .toggle-row input[type="checkbox"] { accent-color: #6e8eff; }
 </style>
@@ -166,13 +185,13 @@
 <body>
 
 <div id="bg-color-source"></div>
+<main id="stage"><div id="canvas-frame"></div></main>
 <svg id="wireframe" preserveAspectRatio="none"></svg>
 <div id="drag-layer"></div>
 
 <aside id="panel">
   <header id="panel-header">
     <span id="panel-title">Mesh gradient editor</span>
-    <button id="collapse-btn" title="Collapse">⇄</button>
   </header>
   <div id="panel-body">
 
@@ -197,8 +216,6 @@
       <div class="section-title">Animation</div>
       <div class="row"><label>Intro</label><input type="range" id="intro-dur" min="200" max="5000" step="100" value="1800"><input type="number" class="val" id="intro-dur-val" min="0" max="20000" step="100" value="1800"></div>
       <div class="row"><label>Outro</label><input type="range" id="outro-dur" min="200" max="5000" step="100" value="1400"><input type="number" class="val" id="outro-dur-val" min="0" max="20000" step="100" value="1400"></div>
-      <div class="row"><label>Float amp</label><input type="range" id="float-amp" min="0" max="0.1" step="0.002" value="0.025"><input type="number" class="val" id="float-amp-val" min="0" max="1" step="0.002" value="0.025"></div>
-      <div class="row"><label>Float speed</label><input type="range" id="float-speed" min="0" max="0.001" step="0.00002" value="0.00018"><input type="number" class="val" id="float-speed-val" min="0" max="0.01" step="0.00001" value="0.00018"></div>
       <div class="btn-row">
         <button class="btn" id="play-intro">Play intro</button>
         <button class="btn" id="play-outro">Play outro</button>
@@ -265,13 +282,12 @@
       <div id="grid-picker"></div>
     </div>
   </div>
+  <footer id="panel-footer">
+    <button class="btn primary" id="export-btn">Export</button>
+    <button class="btn" id="share-btn" title="Copy a shareable URL for this gradient">Copy share link</button>
+    <button class="btn" id="reset-btn">Reset</button>
+  </footer>
 </aside>
-
-<div id="bottom-bar">
-  <button class="btn primary" id="export-btn">Export config</button>
-  <button class="btn" id="share-btn" title="Copy a shareable URL for this gradient">Copy share link</button>
-  <button class="btn" id="reset-btn">Reset</button>
-</div>
 
 <div id="export-modal">
   <div class="modal-card">
@@ -307,12 +323,17 @@
   let showAllHandles = false;
 
   // ---------- gradient lifecycle ----------
+  // Mounts the WebGL canvas inside #canvas-frame so the gradient is bounded
+  // to a card-sized area, with off-bounds nodes/handles visible in the
+  // surrounding stage buffer.
   function rebuildGradient(skipIntro = true) {
     if (gradient) {
       gradient.destroy();
       gradient = null;
     }
-    gradient = new MeshGradient(structuredClone(config));
+    const cfg = structuredClone(config);
+    cfg.container = document.getElementById('canvas-frame');
+    gradient = new MeshGradient(cfg);
     if (skipIntro) {
       gradient.state = 'floating';
       gradient.stateStart = performance.now();
@@ -320,7 +341,8 @@
       gradient.playIntro();
     }
     if (!gradient._running) gradient._loop();
-    document.getElementById('bg-color-source').style.background = config.bgColor;
+    // Page bg stays static and dark (so the canvas frame is visible). The
+    // gradient bgColor only affects the inside of the canvas now.
   }
 
   // ---------- DOM refs ----------
@@ -328,14 +350,24 @@
   const dragLayer = $('drag-layer');
   const wireframe = $('wireframe');
   const gridPicker = $('grid-picker');
+  const canvasFrame = $('canvas-frame');
 
   // ---------- coords ----------
-  // Mesh space (0..1, y-up) ↔ DOM space (px, y-down)
+  // Mesh space (0..1, y-up) ↔ viewport DOM space (px, y-down).
+  // Mesh [0,1] maps to the canvas-frame's rectangle within the viewport;
+  // mesh values outside [0,1] land in the surrounding stage buffer so
+  // off-bounds nodes (e.g. introFrom at -0.3) remain visible and draggable.
+  function canvasBounds() {
+    const r = canvasFrame.getBoundingClientRect();
+    return { left: r.left, top: r.top, width: r.width, height: r.height };
+  }
   function meshToDom(mx, my) {
-    return [mx * window.innerWidth, (1 - my) * window.innerHeight];
+    const b = canvasBounds();
+    return [b.left + mx * b.width, b.top + (1 - my) * b.height];
   }
   function domToMesh(px, py) {
-    return [px / window.innerWidth, 1 - py / window.innerHeight];
+    const b = canvasBounds();
+    return [(px - b.left) / b.width, 1 - (py - b.top) / b.height];
   }
 
   // ---------- grid helpers ----------
@@ -682,8 +714,8 @@
     };
     bindNumeric('intro-dur',   'introDuration',  parseInt,   v => v.toString());
     bindNumeric('outro-dur',   'outroDuration',  parseInt,   v => v.toString());
-    bindNumeric('float-amp',   'floatAmplitude', parseFloat, v => v.toFixed(3));
-    bindNumeric('float-speed', 'floatSpeed',     parseFloat, v => v.toFixed(5));
+    // Float amplitude/speed are kept in config (used by the renderer) but
+    // are not exposed in the editor UI — too niche to be worth a control.
 
     $('play-intro').addEventListener('click', () => rebuildGradient(false));
     $('play-outro').addEventListener('click', () => {
@@ -701,9 +733,6 @@
       renderWireframe();
     });
 
-    $('collapse-btn').addEventListener('click', () => {
-      $('panel').classList.toggle('collapsed');
-    });
   }
 
   // ---------- export ----------
@@ -765,8 +794,6 @@ gradient.playIntro();`;
     $('bg-color-hex').value = config.bgColor;
     setRange('intro-dur',   config.introDuration,  v => String(v));
     setRange('outro-dur',   config.outroDuration,  v => String(v));
-    setRange('float-amp',   config.floatAmplitude, v => v.toFixed(3));
-    setRange('float-speed', config.floatSpeed,     v => v.toFixed(5));
   }
 
   // ---------- resize handling ----------
