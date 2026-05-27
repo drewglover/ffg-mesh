@@ -15,7 +15,7 @@
 
   /* Stage holds the centered canvas-frame. Sits to the left of the sidebar. */
   #stage {
-    position: fixed; top: 0; left: 0; right: 360px; bottom: 0;
+    position: fixed; top: 0; left: 0; right: 420px; bottom: 0;
     display: flex; align-items: center; justify-content: center;
     padding: 80px 80px;
     z-index: 0;
@@ -74,7 +74,7 @@
 
   /* Sidebar — anchored full-height on the right edge. */
   #panel {
-    position: fixed; top: 0; right: 0; bottom: 0; width: 360px; z-index: 10;
+    position: fixed; top: 0; right: 0; bottom: 0; width: 420px; z-index: 10;
     background: #11131b;
     border-left: 1px solid rgba(255,255,255,0.06);
     display: flex; flex-direction: column; overflow: hidden;
@@ -203,6 +203,10 @@
         <input type="text" id="bg-color-hex" value="#0a0a14" style="max-width: 90px;">
       </div>
       <div class="toggle-row">
+        <input type="checkbox" id="show-nodes" checked>
+        <label for="show-nodes">Show nodes</label>
+      </div>
+      <div class="toggle-row">
         <input type="checkbox" id="show-wireframe" checked>
         <label for="show-wireframe">Show mesh wireframe</label>
       </div>
@@ -319,6 +323,7 @@
   let config = structuredClone(defaultConfig);
   let selectedVertexIndex = null;
   let gradient = null;
+  let showNodes = true;
   let showWireframe = true;
   let showAllHandles = false;
 
@@ -448,14 +453,20 @@
   // ---------- drag handles ----------
   function renderHandles() {
     dragLayer.innerHTML = '';
-    config.vertices.forEach((v, k) => {
-      const h = document.createElement('div');
-      h.className = 'node-handle' + (k === selectedVertexIndex ? ' selected' : '');
-      h.style.background = v.color;
-      h.dataset.idx = k;
-      bindNodeDrag(h, k);
-      dragLayer.appendChild(h);
-    });
+    // Node circles are hideable via the 'Show nodes' toggle so the gradient
+    // can be previewed without UI chrome. Selection still works through the
+    // sidebar's grid picker; tangent handles continue to render normally so
+    // an already-selected vertex remains editable.
+    if (showNodes) {
+      config.vertices.forEach((v, k) => {
+        const h = document.createElement('div');
+        h.className = 'node-handle' + (k === selectedVertexIndex ? ' selected' : '');
+        h.style.background = v.color;
+        h.dataset.idx = k;
+        bindNodeDrag(h, k);
+        dragLayer.appendChild(h);
+      });
+    }
 
     // Tangent handles for selected (or all, if toggled)
     const tangentSet = new Set();
@@ -723,6 +734,10 @@
       setTimeout(() => rebuildGradient(), (config.outroDuration + config.vertices.length * 40) + 200);
     });
 
+    $('show-nodes').addEventListener('change', (e) => {
+      showNodes = e.target.checked;
+      renderHandles();
+    });
     $('show-wireframe').addEventListener('change', (e) => {
       showWireframe = e.target.checked;
       renderWireframe();
