@@ -236,8 +236,19 @@
       <div class="section-title" id="detail-title">Vertex</div>
       <div class="row">
         <label>Color</label>
-        <input type="color" id="n-color">
-        <input type="text" id="n-color-hex" style="max-width: 90px;">
+        <select id="n-color-select">
+          <option value="#f7f5f1">white</option>
+          <option value="#bcefff">blue-1</option>
+          <option value="#A5D6EA">blue-2</option>
+          <option value="#8FBED5">blue-3</option>
+          <option value="#7AA6C0">blue-4</option>
+          <option value="#678EAC">blue-5</option>
+          <option value="#557797">blue-6</option>
+          <option value="#446182">blue-7</option>
+          <option value="#344C6E">blue-8</option>
+          <option value="#263759">blue-9</option>
+          <option value="#ffe3d9">coral</option>
+        </select>
       </div>
       <div class="row"><label>X</label><input type="range" id="n-x" min="-0.2" max="1.2" step="0.005"><input type="number" class="val" id="n-x-val" min="-2" max="2" step="0.001"></div>
       <div class="row"><label>Y</label><input type="range" id="n-y" min="-0.2" max="1.2" step="0.005"><input type="number" class="val" id="n-y-val" min="-2" max="2" step="0.001"></div>
@@ -625,10 +636,9 @@
   function syncDetailInputs() {
     if (selectedVertexIndex === null) return;
     const v = config.vertices[selectedVertexIndex];
-    $('n-color').value = v.color;
-    $('n-color-hex').value = v.color;
-    setRange('n-x',  v.position[0], n => n.toFixed(3));
-    setRange('n-y',  v.position[1], n => n.toFixed(3));
+    $('n-color-select').value = v.color.toLowerCase();
+    setRange('n-x',  v.position[0], n => n.toFixed(2));
+    setRange('n-y',  v.position[1], n => n.toFixed(2));
     setRange('n-ix', (v.introFrom || v.position)[0], n => n.toFixed(2));
     setRange('n-iy', (v.introFrom || v.position)[1], n => n.toFixed(2));
     setRange('n-ox', (v.outroTo   || v.position)[0], n => n.toFixed(2));
@@ -643,8 +653,8 @@
         xi.value = ''; yi.value = '';
       } else {
         row.classList.remove('disabled');
-        xi.value = h[0].toFixed(3);
-        yi.value = h[1].toFixed(3);
+        xi.value = h[0].toFixed(2);
+        yi.value = h[1].toFixed(2);
       }
     });
   }
@@ -657,15 +667,11 @@
 
   // ---------- detail-panel bindings ----------
   function bindDetailInputs() {
-    const onColor = (e) => {
+    $('n-color-select').addEventListener('change', (e) => {
       if (selectedVertexIndex === null) return;
-      const v = e.target.value;
-      config.vertices[selectedVertexIndex].color = v;
-      $('n-color').value = v; $('n-color-hex').value = v;
+      config.vertices[selectedVertexIndex].color = e.target.value;
       afterMutate();
-    };
-    $('n-color').addEventListener('input', onColor);
-    $('n-color-hex').addEventListener('change', onColor);
+    });
 
     const bindXY = (id, target, idx, idxOnVertex = null) => {
       const apply = (raw) => {
@@ -681,7 +687,7 @@
           v[target][idx] = n;
         }
         $(id).value = n;
-        $(id + '-val').value = n.toFixed(target === 'position' ? 3 : 2);
+        $(id + '-val').value = n.toFixed(2);
         afterMutate();
       };
       $(id).addEventListener('input', (e) => apply(e.target.value));

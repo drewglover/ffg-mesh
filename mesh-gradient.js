@@ -272,6 +272,7 @@ export class MeshGradient {
   playOutro() {
     this.state = 'outro';
     this.stateStart = performance.now();
+    if (!this._running) this._loop();
   }
 
   // Render a static frame at the current vertex positions (no animation) at the
@@ -340,15 +341,7 @@ export class MeshGradient {
     }
 
     if (this.state === 'floating') {
-      // Interior vertices drift; boundary stays put so the gradient stays
-      // anchored to the canvas edges.
-      const { i, j } = this._gridCoords(vi);
-      const isBoundary = (i === 0 || i === this.cols - 1 || j === 0 || j === this.rows - 1);
-      if (isBoundary) return v.position;
-      const p = this._floatPhases[vi];
-      const dx = Math.sin(now * this.floatSpeed * p.sx + p.ax) * this.floatAmplitude;
-      const dy = Math.cos(now * this.floatSpeed * p.sy + p.ay) * this.floatAmplitude;
-      return [v.position[0] + dx, v.position[1] + dy];
+      return v.position;
     }
 
     return v.position;
@@ -394,10 +387,13 @@ export class MeshGradient {
     if (this.state === 'intro' && elapsed > this.introDuration + this.vertices.length * 50) {
       this.state = 'floating';
       this.stateStart = now;
+      // Fall through to render one final frame at rest positions, then stop.
     } else if (this.state === 'outro' && elapsed > this.outroDuration + this.vertices.length * 40) {
       this.state = 'done';
       this.onOutroComplete();
     }
+
+    const isNowFloating = this.state === 'floating';
 
     const verts = this._resolveVertices(now);
     this._tessellate(verts);
@@ -422,6 +418,9 @@ export class MeshGradient {
     gl.uniform3fv(this.uniforms.bgColor, hexToRgb(this.bgColor));
 
     gl.drawElements(gl.TRIANGLES, this._indexCount, gl.UNSIGNED_SHORT, 0);
+
+    // Once we've settled into floating (static), stop the rAF loop.
+    if (isNowFloating) { this._running = false; return; }
   }
 
   // Walk every patch, evaluate Coons patch + bilinear color at N×N samples,
@@ -526,7 +525,7 @@ export function defaultGrid(rows = 4, cols = 4) {
       };
       out.push({
         position: [u, v],
-        color: bilerpHex(corners.bl, corners.br, corners.tl, corners.tr, u, v),
+        color: '#f7f5f1',
         handles,
         // Intro: push edge vertices off-canvas, interior stays put. The mesh
         // "stretches in" from the boundary on intro.
