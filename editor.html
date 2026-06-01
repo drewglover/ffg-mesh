@@ -164,12 +164,12 @@
   .handle-row.disabled .pair input { opacity: 0.25; pointer-events: none; }
   .handle-row.disabled .reset { display: none; }
 
-  /* Export modal */
-  #export-modal {
+  /* Export / Import modals */
+  #export-modal, #import-modal {
     position: fixed; inset: 0; z-index: 100; display: none;
     align-items: center; justify-content: center; background: rgba(0,0,0,0.6);
   }
-  #export-modal.open { display: flex; }
+  #export-modal.open, #import-modal.open { display: flex; }
   .modal-card {
     background: #1a1a26; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
     padding: 20px; width: min(720px, 90vw); max-height: 80vh; display: flex; flex-direction: column;
@@ -293,6 +293,7 @@
   </div>
   <footer id="panel-footer">
     <button class="btn primary" id="export-btn">Export</button>
+    <button class="btn" id="import-btn">Import</button>
     <button class="btn" id="share-btn" title="Copy a shareable URL for this gradient">Copy share link</button>
     <button class="btn" id="reset-btn">Reset</button>
   </footer>
@@ -305,6 +306,18 @@
     <div class="modal-actions">
       <button class="btn" id="copy-btn">Copy</button>
       <button class="btn" id="close-modal">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="import-modal">
+  <div class="modal-card">
+    <h3>Import config — paste exported <code>MeshGradient</code> code</h3>
+    <textarea id="import-text" placeholder="Paste your exported gradient code here…"></textarea>
+    <div id="import-error" style="color:#ff6b6b; font-size:12px; min-height:16px; margin-top:4px;"></div>
+    <div class="modal-actions">
+      <button class="btn primary" id="import-apply-btn">Apply</button>
+      <button class="btn" id="close-import-modal">Cancel</button>
     </div>
   </div>
 </div>
@@ -809,6 +822,56 @@ gradient.playIntro();`;
     });
   }
 
+  // ---------- import ----------
+  function parseImportedConfig(src) {
+    // Extract the options object literal from: new MeshGradient({ ... })
+    const match = src.match(/new\s+MeshGradient\s*\(\s*(\{[\s\S]*?\})\s*\)/);
+    if (!match) throw new Error('Could not find new MeshGradient({…}) in pasted code.');
+    const objSrc = match[1];
+
+    // Use Function() to evaluate the JS object literal safely.
+    // We intentionally allow only a plain object evaluation here.
+    // eslint-disable-next-line no-new-func
+    const parsed = (new Function(`"use strict"; return (${objSrc});`))();
+
+    // Minimal validation
+    if (!parsed || typeof parsed !== 'object') throw new Error('Parsed value is not an object.');
+    if (!Array.isArray(parsed.vertices) || parsed.vertices.length === 0) throw new Error('vertices array is missing or empty.');
+    return parsed;
+  }
+
+  function bindImport() {
+    $('import-btn').addEventListener('click', () => {
+      $('import-text').value = '';
+      $('import-error').textContent = '';
+      $('import-modal').classList.add('open');
+      $('import-text').focus();
+    });
+    $('close-import-modal').addEventListener('click', () => $('import-modal').classList.remove('open'));
+    $('import-apply-btn').addEventListener('click', () => {
+      $('import-error').textContent = '';
+      try {
+        const parsed = parseImportedConfig($('import-text').value);
+        // Merge parsed fields into config (keep current defaults for anything missing)
+        if (parsed.bgColor)        config.bgColor        = parsed.bgColor;
+        if (parsed.introDuration != null) config.introDuration = parsed.introDuration;
+        if (parsed.outroDuration != null) config.outroDuration = parsed.outroDuration;
+        if (parsed.floatAmplitude != null) config.floatAmplitude = parsed.floatAmplitude;
+        if (parsed.floatSpeed    != null) config.floatSpeed    = parsed.floatSpeed;
+        if (parsed.rows          != null) config.rows          = parsed.rows;
+        if (parsed.cols          != null) config.cols          = parsed.cols;
+        config.vertices = parsed.vertices;
+        selectedVertexIndex = null;
+        syncGlobalInputs();
+        renderHandles(); renderWireframe(); renderGridPicker(); syncDetailPanel();
+        rebuildGradient();
+        $('import-modal').classList.remove('open');
+      } catch (e) {
+        $('import-error').textContent = 'Error: ' + e.message;
+      }
+    });
+  }
+
   function syncGlobalInputs() {
     $('bg-color').value = config.bgColor;
     $('bg-color-hex').value = config.bgColor;
@@ -954,6 +1017,7 @@ gradient.playIntro();`;
   bindGlobalInputs();
   bindDetailInputs();
   bindExport();
+  bindImport();
   bindShare();
   renderHandles();
   renderWireframe();
