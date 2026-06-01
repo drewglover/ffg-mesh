@@ -294,6 +294,7 @@
   <footer id="panel-footer">
     <button class="btn primary" id="export-btn">Export</button>
     <button class="btn" id="import-btn">Import</button>
+    <button class="btn" id="jpg-export-btn">Save JPG</button>
     <button class="btn" id="share-btn" title="Copy a shareable URL for this gradient">Copy share link</button>
     <button class="btn" id="reset-btn">Reset</button>
   </footer>
@@ -356,6 +357,7 @@
     }
     const cfg = structuredClone(config);
     cfg.container = document.getElementById('canvas-frame');
+    cfg.preserveDrawingBuffer = true;
     gradient = new MeshGradient(cfg);
     if (skipIntro) {
       gradient.state = 'floating';
@@ -822,6 +824,21 @@ gradient.playIntro();`;
     });
   }
 
+  // ---------- jpg export ----------
+  function bindJpgExport() {
+    $('jpg-export-btn').addEventListener('click', () => {
+      try {
+        const dataUrl = gradient.snapshot(1920, 1080, 0.92);
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = 'gradient.jpg';
+        a.click();
+      } catch (e) {
+        alert('JPG export failed: ' + e.message);
+      }
+    });
+  }
+
   // ---------- import ----------
   function parseImportedConfig(src) {
     // Extract the options object literal from: new MeshGradient({ ... })
@@ -1018,6 +1035,7 @@ gradient.playIntro();`;
   bindDetailInputs();
   bindExport();
   bindImport();
+  bindJpgExport();
   bindShare();
   renderHandles();
   renderWireframe();

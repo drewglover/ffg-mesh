@@ -120,6 +120,8 @@ export class MeshGradient {
     this.state = 'idle'; // 'idle' | 'intro' | 'floating' | 'outro' | 'done'
     this.stateStart = 0;
 
+    this._preserveDrawingBuffer = options.preserveDrawingBuffer ?? false;
+
     this._setupCanvas(options.container);
     this._setupGL();
     this._allocBuffers();
@@ -159,7 +161,11 @@ export class MeshGradient {
   }
 
   _setupGL() {
-    const gl = this.canvas.getContext('webgl', { antialias: true, premultipliedAlpha: false });
+    const gl = this.canvas.getContext('webgl', {
+      antialias: true,
+      premultipliedAlpha: false,
+      preserveDrawingBuffer: this._preserveDrawingBuffer || false,
+    });
     if (!gl) throw new Error('WebGL not available');
     this.gl = gl;
 
@@ -266,6 +272,32 @@ export class MeshGradient {
   playOutro() {
     this.state = 'outro';
     this.stateStart = performance.now();
+  }
+
+  // Render a static frame at the current vertex positions (no animation) at the
+  // given pixel dimensions and return a JPG data URL. Requires the instance to
+  // have been created with `preserveDrawingBuffer: true`.
+  snapshot(width, height, quality = 0.92) {
+    const prev = { w: this.canvas.width, h: this.canvas.height, state: this.state };
+
+    // Resize canvas to export dimensions.
+    this.canvas.width  = width;
+    this.canvas.height = height;
+    this.gl.viewport(0, 0, width, height);
+
+    // Render with vertices at their rest positions by temporarily freezing state.
+    this.state = 'idle';
+    this._render(0);
+
+    const dataUrl = this.canvas.toDataURL('image/jpeg', quality);
+
+    // Restore.
+    this.canvas.width  = prev.w;
+    this.canvas.height = prev.h;
+    this.gl.viewport(0, 0, prev.w, prev.h);
+    this.state = prev.state;
+
+    return dataUrl;
   }
 
   // ---------- render loop ----------
