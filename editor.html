@@ -204,8 +204,10 @@
       <div class="section-title">Background</div>
       <div class="row">
         <label>Color</label>
-        <input type="color" id="bg-color" value="#f7f5f1">
-        <input type="text" id="bg-color-hex" value="#f7f5f1" style="max-width: 90px;">
+        <select id="bg-color-select">
+          <option value="#f7f5f1">light</option>
+          <option value="#141143">dark</option>
+        </select>
       </div>
       <div class="toggle-row">
         <input type="checkbox" id="show-nodes" checked>
@@ -731,11 +733,10 @@
     const onBg = (e) => {
       const v = e.target.value;
       config.bgColor = v;
-      $('bg-color').value = v; $('bg-color-hex').value = v;
+      $('bg-color-select').value = v;
       rebuildGradient();
     };
-    $('bg-color').addEventListener('input', onBg);
-    $('bg-color-hex').addEventListener('change', onBg);
+    $('bg-color-select').addEventListener('change', onBg);
 
     const bindNumeric = (id, key, parse = parseFloat, fmt = (v) => v.toFixed(2)) => {
       const apply = (raw) => {
@@ -896,8 +897,7 @@ gradient.playIntro();`;
   }
 
   function syncGlobalInputs() {
-    $('bg-color').value = config.bgColor;
-    $('bg-color-hex').value = config.bgColor;
+    $('bg-color-select').value = config.bgColor;
     setRange('intro-dur',   config.introDuration,  v => String(v));
     setRange('outro-dur',   config.outroDuration,  v => String(v));
   }
