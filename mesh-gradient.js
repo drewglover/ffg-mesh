@@ -59,6 +59,12 @@ const FLOAT_SPEED     = 0.00018;      // radians per ms (base angular speed)
 // (decayed on top of the outro), so the mesh never snaps on/off its drift.
 const FLOAT_SETTLE_DURATION = 900;    // ms
 
+// Pulse tuning. A one-shot ripple where interior vertices pull radially inward
+// toward the mesh center and ease back, layered on top of the idle drift.
+const PULSE_DURATION  = 1600;         // ms (total: quick pull-in + long ease-out)
+const PULSE_AMPLITUDE = 0.085;        // mesh-space units of peak radial pull
+const PULSE_IN_FRACTION = 0.3;        // share of the duration spent pulling in
+
 // Evaluate cubic Bezier B(t) = (1-t)³P0 + 3(1-t)²t·P1 + 3(1-t)t²·P2 + t³P3.
 // Returns [x, y]. P0..P3 are [x, y] arrays.
 function cubicBezier(P0, P1, P2, P3, t) {
@@ -284,6 +290,15 @@ export class MeshGradient {
     this.stateStart = performance.now();
     if (!this._running) this._loop();
   }
+  // One-shot pulse: ripple the interior vertices inward and back, then resume
+  // the idle float. No-op during intro/outro so it can't interrupt them.
+  playPulse() {
+    if (this.state === 'intro' || this.state === 'outro') return;
+    this._pulseStart = performance.now();
+    this.state = 'pulse';
+    this.stateStart = this._pulseStart;
+    if (!this._running) this._loop();
+  }
 
   // Render a static frame at the current vertex positions (no animation) at the
   // given pixel dimensions and return a JPG data URL. Requires the instance to
@@ -353,6 +368,33 @@ export class MeshGradient {
         const d = this._floatDelta(vi, now);
         x += d[0] * w;
         y += d[1] * w;
+      }
+      return [x, y];
+    }
+
+    if (this.state === 'pulse') {
+      // Interior vertices push outward from the mesh center and ease back, on
+      // top of the continuous idle drift. Boundary vertices stay glued.
+      const d = this._floatDelta(vi, now);
+      let x = v.position[0] + d[0];
+      let y = v.position[1] + d[1];
+      const { i, j } = this._gridCoords(vi);
+      const interior = !(i === 0 || i === this.cols - 1 || j === 0 || j === this.rows - 1);
+      if (interior) {
+        // Asymmetric envelope: a fairly quick pull inward, then a long, gentle
+        // ease back out so the mesh settles rather than snapping into place.
+        const t = Math.min(1, elapsed / PULSE_DURATION);
+        let env;
+        if (t < PULSE_IN_FRACTION) {
+          env = EASE.outCubic(t / PULSE_IN_FRACTION);
+        } else {
+          const k = (t - PULSE_IN_FRACTION) / (1 - PULSE_IN_FRACTION);
+          env = Math.pow(1 - k, 3); // velocity → 0 as k → 1, so no snap
+        }
+        let rx = v.position[0] - 0.5, ry = v.position[1] - 0.5;
+        const len = Math.hypot(rx, ry) || 1;
+        x -= (rx / len) * env * PULSE_AMPLITUDE;
+        y -= (ry / len) * env * PULSE_AMPLITUDE;
       }
       return [x, y];
     }
@@ -428,6 +470,13 @@ export class MeshGradient {
     } else if (this.state === 'outro' && elapsed > this.outroDuration + this.vertices.length * 40) {
       this.state = 'done';
       this.onOutroComplete();
+    } else if (this.state === 'pulse' && elapsed > PULSE_DURATION) {
+      this.state = 'floating';
+      // Backdate the start so the float's settle ramp is already complete — the
+      // drift is at full strength throughout the pulse, so re-ramping it from
+      // zero here would jerk the mesh. Drift uses absolute `now`, so it stays
+      // continuous across the handoff.
+      this.stateStart = now - FLOAT_SETTLE_DURATION;
     }
 
     const verts = this._resolveVertices(now);

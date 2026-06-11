@@ -243,11 +243,10 @@
 
     <div class="section">
       <div class="section-title">Animation</div>
-      <div class="row"><label>Intro</label><input type="range" id="intro-dur" min="200" max="5000" step="100" value="1800"><input type="number" class="val" id="intro-dur-val" min="0" max="20000" step="100" value="1800"></div>
-      <div class="row"><label>Outro</label><input type="range" id="outro-dur" min="200" max="5000" step="100" value="1400"><input type="number" class="val" id="outro-dur-val" min="0" max="20000" step="100" value="1400"></div>
       <div class="btn-row">
         <button class="btn" id="play-intro">Play intro</button>
         <button class="btn" id="play-outro">Play outro</button>
+        <button class="btn" id="play-pulse">Pulse</button>
       </div>
     </div>
 
@@ -781,15 +780,17 @@
       $(id).addEventListener('input', (e) => apply(e.target.value));
       $(id + '-val').addEventListener('change', (e) => apply(e.target.value));
     };
-    bindNumeric('intro-dur',   'introDuration',  parseInt,   v => v.toString());
-    bindNumeric('outro-dur',   'outroDuration',  parseInt,   v => v.toString());
-    // Float amplitude/speed are kept in config (used by the renderer) but
-    // are not exposed in the editor UI — too niche to be worth a control.
+    // Animation durations and float amplitude/speed are kept in config (used by
+    // the renderer) but are not exposed in the editor UI — too niche to be worth
+    // a control.
 
     $('play-intro').addEventListener('click', () => rebuildGradient(false));
     $('play-outro').addEventListener('click', () => {
       if (gradient) gradient.playOutro();
       setTimeout(() => rebuildGradient(), (config.outroDuration + config.vertices.length * 40) + 200);
+    });
+    $('play-pulse').addEventListener('click', () => {
+      if (gradient) gradient.playPulse();
     });
 
     $('show-nodes').addEventListener('change', (e) => {
@@ -925,8 +926,6 @@ gradient.playIntro();`;
 
   function syncGlobalInputs() {
     $('bg-color-select').value = config.bgColor;
-    setRange('intro-dur',   config.introDuration,  v => String(v));
-    setRange('outro-dur',   config.outroDuration,  v => String(v));
   }
 
   // ---------- resize handling ----------
