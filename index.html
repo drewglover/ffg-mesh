@@ -43,16 +43,13 @@
   //   with straight default handles — swap it for a custom vertices array
   //   exported from the editor (Export button → JS literal), or load a
   //   shared gradient via the editor's URL hash.
-  // - floatAmplitude / floatSpeed control the gentle drift on interior
-  //   vertices once the intro finishes. The editor no longer exposes them
-  //   in the UI but the renderer still uses them; tweak here if you want a
-  //   different motion character.
+  // - After the intro finishes the interior vertices drift in a gentle,
+  //   fixed idle float (boundary vertices stay glued to the edges). The
+  //   motion is not configurable; see FLOAT_* constants in mesh-gradient.js.
   const gradient = new MeshGradient({
     bgColor: '#f7f5f1',
     introDuration: 1800,
     outroDuration: 1400,
-    floatAmplitude: 0.025,
-    floatSpeed: 0.00018,
     rows: 4,
     cols: 4,
     vertices: [
