@@ -365,8 +365,6 @@
     bgColor: '#f7f5f1',
     introDuration: 1800,
     outroDuration: 1400,
-    floatAmplitude: 0.025,
-    floatSpeed: 0.00018,
     rows: ROWS,
     cols: COLS,
     vertices: defaultGrid(ROWS, COLS),
@@ -393,12 +391,14 @@
     cfg.preserveDrawingBuffer = true;
     gradient = new MeshGradient(cfg);
     if (skipIntro) {
-      gradient.state = 'floating';
+      // Editing view: hold the mesh at its rest positions (no idle drift) so
+      // nodes/handles stay aligned with what you're editing.
+      gradient.state = 'idle';
       gradient.stateStart = performance.now();
+      gradient._render(performance.now());
     } else {
       gradient.playIntro();
     }
-    if (!gradient._running) gradient._loop();
     // Page bg stays static and dark (so the canvas frame is visible). The
     // gradient bgColor only affects the inside of the canvas now.
   }
@@ -825,8 +825,6 @@
   bgColor: '${config.bgColor}',
   introDuration: ${config.introDuration},
   outroDuration: ${config.outroDuration},
-  floatAmplitude: ${config.floatAmplitude.toFixed(3)},
-  floatSpeed: ${config.floatSpeed.toFixed(5)},
   rows: ${config.rows},
   cols: ${config.cols},
   vertices: [
@@ -911,8 +909,6 @@ gradient.playIntro();`;
         if (parsed.bgColor)        config.bgColor        = parsed.bgColor;
         if (parsed.introDuration != null) config.introDuration = parsed.introDuration;
         if (parsed.outroDuration != null) config.outroDuration = parsed.outroDuration;
-        if (parsed.floatAmplitude != null) config.floatAmplitude = parsed.floatAmplitude;
-        if (parsed.floatSpeed    != null) config.floatSpeed    = parsed.floatSpeed;
         if (parsed.rows          != null) config.rows          = parsed.rows;
         if (parsed.cols          != null) config.cols          = parsed.cols;
         config.vertices = parsed.vertices;
@@ -953,8 +949,6 @@ gradient.playIntro();`;
       bg: c.bgColor,
       i: c.introDuration,
       o: c.outroDuration,
-      a: c.floatAmplitude,
-      s: c.floatSpeed,
       r: c.rows,
       cols: c.cols,
       v: c.vertices.map(v => ({
@@ -971,8 +965,6 @@ gradient.playIntro();`;
       bgColor: d.bg,
       introDuration:  d.i,
       outroDuration:  d.o,
-      floatAmplitude: d.a,
-      floatSpeed:     d.s,
       rows: d.r,
       cols: d.cols,
       vertices: d.v.map(v => ({

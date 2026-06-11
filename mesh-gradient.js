@@ -51,6 +51,14 @@ const EASE = {
   inCubic:  t => t * t * t,
 };
 
+// Idle float tuning. Fixed (not configurable) — interior vertices drift gently
+// while the mesh is at rest. Amplitude is 10% below the legacy 0.025 default.
+const FLOAT_AMPLITUDE = 0.0225;       // mesh-space units of peak drift
+const FLOAT_SPEED     = 0.00018;      // radians per ms (base angular speed)
+// Ramp window for fading the idle drift in (intro → float) and back out
+// (decayed on top of the outro), so the mesh never snaps on/off its drift.
+const FLOAT_SETTLE_DURATION = 900;    // ms
+
 // Evaluate cubic Bezier B(t) = (1-t)³P0 + 3(1-t)²t·P1 + 3(1-t)t²·P2 + t³P3.
 // Returns [x, y]. P0..P3 are [x, y] arrays.
 function cubicBezier(P0, P1, P2, P3, t) {
@@ -100,8 +108,6 @@ export class MeshGradient {
     this.bgColor = options.bgColor || '#f7f5f1';
     this.introDuration  = options.introDuration  ?? 1800;
     this.outroDuration  = options.outroDuration  ?? 1400;
-    this.floatAmplitude = options.floatAmplitude ?? 0.025;
-    this.floatSpeed     = options.floatSpeed     ?? 0.00018;
     this.onOutroComplete = options.onOutroComplete || (() => {});
 
     // Vertices: row-major. v(i, j) at index j*cols + i.
@@ -270,6 +276,10 @@ export class MeshGradient {
     if (!this._running) this._loop();
   }
   playOutro() {
+    // If the mesh is drifting, carry the live drift into the outro and decay it
+    // to zero as the outro animates — the vertices ease directly off their
+    // current (offset) positions onto the outro path, no separate settle.
+    this._outroFloatCarry = this.state === 'floating';
     this.state = 'outro';
     this.stateStart = performance.now();
     if (!this._running) this._loop();
@@ -334,17 +344,44 @@ export class MeshGradient {
       const t = Math.max(0, Math.min(1, (elapsed - stagger) / this.outroDuration));
       const e = EASE.inCubic(t);
       const to = v.outroTo || v.position;
-      return [
-        v.position[0] + (to[0] - v.position[0]) * e,
-        v.position[1] + (to[1] - v.position[1]) * e,
-      ];
+      let x = v.position[0] + (to[0] - v.position[0]) * e;
+      let y = v.position[1] + (to[1] - v.position[1]) * e;
+      // Decay any carried-over idle drift to zero as the outro proceeds, so the
+      // vertex eases directly off its drifted position rather than snapping.
+      if (this._outroFloatCarry) {
+        const w = 1 - EASE.outCubic(Math.min(1, elapsed / FLOAT_SETTLE_DURATION));
+        const d = this._floatDelta(vi, now);
+        x += d[0] * w;
+        y += d[1] * w;
+      }
+      return [x, y];
     }
 
     if (this.state === 'floating') {
-      return v.position;
+      // Ease the drift in from zero when we first enter the float so the mesh
+      // doesn't jump off its rest position as the intro hands over.
+      const t = Math.max(0, Math.min(1, elapsed / FLOAT_SETTLE_DURATION));
+      const w = EASE.outCubic(t);
+      const d = this._floatDelta(vi, now);
+      return [v.position[0] + d[0] * w, v.position[1] + d[1] * w];
     }
 
     return v.position;
+  }
+
+  // Per-vertex idle drift offset in mesh space. Boundary vertices stay glued to
+  // the canvas edges (zero offset); interior vertices oscillate on independent
+  // phases/speeds. Uses absolute `now` so the motion is continuous across the
+  // float ramp-in and the outro drift-decay.
+  _floatDelta(vi, now) {
+    const { i, j } = this._gridCoords(vi);
+    if (i === 0 || i === this.cols - 1 || j === 0 || j === this.rows - 1) {
+      return [0, 0];
+    }
+    const ph = this._floatPhases[vi];
+    const dx = Math.sin(now * FLOAT_SPEED * ph.sx + ph.ax) * FLOAT_AMPLITUDE;
+    const dy = Math.sin(now * FLOAT_SPEED * ph.sy + ph.ay) * FLOAT_AMPLITUDE;
+    return [dx, dy];
   }
 
   _gridCoords(vi) { return { i: vi % this.cols, j: Math.floor(vi / this.cols) }; }
@@ -387,13 +424,11 @@ export class MeshGradient {
     if (this.state === 'intro' && elapsed > this.introDuration + this.vertices.length * 50) {
       this.state = 'floating';
       this.stateStart = now;
-      // Fall through to render one final frame at rest positions, then stop.
+      // Settle into the continuous idle-float loop.
     } else if (this.state === 'outro' && elapsed > this.outroDuration + this.vertices.length * 40) {
       this.state = 'done';
       this.onOutroComplete();
     }
-
-    const isNowFloating = this.state === 'floating';
 
     const verts = this._resolveVertices(now);
     this._tessellate(verts);
@@ -418,9 +453,6 @@ export class MeshGradient {
     gl.uniform3fv(this.uniforms.bgColor, hexToRgb(this.bgColor));
 
     gl.drawElements(gl.TRIANGLES, this._indexCount, gl.UNSIGNED_SHORT, 0);
-
-    // Once we've settled into floating (static), stop the rAF loop.
-    if (isNowFloating) { this._running = false; return; }
   }
 
   // Walk every patch, evaluate Coons patch + bilinear color at N×N samples,
