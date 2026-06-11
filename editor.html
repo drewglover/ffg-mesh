@@ -5,13 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mesh gradient editor</title>
 <style>
+  :root {
+    --light: #f7f5f1;
+    --dark: #141143;
+  }
+
   html, body { margin: 0; padding: 0; height: 100vh; overflow: hidden;
     font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif; color: white;
-    background: #06070b; }
+    background: color-mix(in srgb, var(--light) 90%, #000); }
 
-  /* Page backdrop — deliberately darker than the canvas bgColor so the
-     canvas frame is visible. Not tied to the gradient bgColor anymore. */
-  #bg-color-source { position: fixed; inset: 0; z-index: -2; background: #06070b; }
+  /* Page backdrop — the "light" swatch with a 10% dark overlay. */
+  #bg-color-source { position: fixed; inset: 0; z-index: -2;
+    background: color-mix(in srgb, var(--light) 90%, #000); }
 
   /* Stage holds the centered canvas-frame. Sits to the left of the sidebar. */
   #stage {
@@ -30,8 +35,8 @@
     max-width: 984px; max-height: calc(100vh - 220px);
     border-radius: 14px; overflow: hidden;
     box-shadow:
-      0 30px 80px rgba(0,0,0,0.55),
-      0 12px 28px rgba(0,0,0,0.45),
+      0 30px 80px rgba(0,0,0,0.05),
+      0 12px 28px rgba(0,0,0,0.05),
       0 0 0 1px rgba(255,255,255,0.06);
   }
 
@@ -80,17 +85,17 @@
   /* Sidebar — anchored full-height on the right edge. */
   #panel {
     position: fixed; top: 0; right: 0; bottom: 0; width: 420px; z-index: 10;
-    background: #11131b;
-    border-left: 1px solid rgba(255,255,255,0.06);
+    background: var(--light); color: #1a1a1a;
+    border-left: 1px solid rgba(0,0,0,0.12);
     display: flex; flex-direction: column; overflow: hidden;
   }
   #panel-header {
-    padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.06); flex-shrink: 0;
+    padding: 14px 18px; border-bottom: 1px solid rgba(0,0,0,0.12); flex-shrink: 0;
   }
   #panel-title { font-size: 13px; font-weight: 500; letter-spacing: 0.02em; }
   #panel-body { padding: 14px 18px 20px; overflow-y: auto; flex: 1; }
   #panel-footer {
-    padding: 12px 18px; border-top: 1px solid rgba(255,255,255,0.06); flex-shrink: 0;
+    padding: 12px 18px; border-top: 1px solid rgba(0,0,0,0.12); flex-shrink: 0;
     display: flex; gap: 8px; flex-wrap: wrap;
   }
 
@@ -102,22 +107,22 @@
 
   .row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; }
   .row label { flex: 0 0 70px; opacity: 0.7; }
-  .row input[type="range"] { flex: 1; min-width: 0; }
+  .row input[type="range"] { flex: 1; min-width: 0; accent-color: #1a1a1a; }
   .row .val {
     flex: 0 0 56px; text-align: right; font-variant-numeric: tabular-nums; opacity: 0.85;
-    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);
-    color: white; padding: 3px 6px; border-radius: 4px; font: inherit; font-size: 12px;
+    background: rgba(0,0,0,0.06); border: 1px solid rgba(0,0,0,0.15);
+    color: #1a1a1a; padding: 3px 6px; border-radius: 4px; font: inherit; font-size: 12px;
     -moz-appearance: textfield;
   }
   .row .val::-webkit-outer-spin-button, .row .val::-webkit-inner-spin-button {
     -webkit-appearance: none; margin: 0;
   }
-  .row .val:focus { outline: none; border-color: rgba(120, 150, 255, 0.6); opacity: 1; }
+  .row .val:focus { outline: none; border-color: rgba(60, 90, 220, 0.6); opacity: 1; }
   .row input[type="text"], .row input[type="number"] {
-    width: 100%; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);
-    color: white; padding: 5px 8px; border-radius: 4px; font: inherit;
+    width: 100%; background: rgba(0,0,0,0.06); border: 1px solid rgba(0,0,0,0.15);
+    color: #1a1a1a; padding: 5px 8px; border-radius: 4px; font: inherit;
   }
-  .row input[type="color"] { width: 40px; height: 24px; padding: 0; border: 1px solid rgba(255,255,255,0.2);
+  .row input[type="color"] { width: 40px; height: 24px; padding: 0; border: 1px solid rgba(0,0,0,0.25);
     border-radius: 4px; background: none; cursor: pointer; }
 
   /* Grid picker: visual 4x4 of swatches to select a vertex. */
@@ -126,20 +131,23 @@
     width: 100%; aspect-ratio: 1; border-radius: 4px; cursor: pointer;
     border: 2px solid transparent; box-sizing: border-box;
     background-clip: padding-box;
+    outline: 1px solid rgba(0,0,0,0.45); outline-offset: -1px;
   }
-  .grid-cell.selected { border-color: white; }
+  .grid-cell.selected { border-color: #1a1a1a; }
   .grid-cell:hover { transform: scale(1.05); }
 
   button.btn {
-    background: rgba(255,255,255,0.08); color: white; border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(0,0,0,0.06); color: #1a1a1a; border: 1px solid rgba(0,0,0,0.15);
     padding: 7px 12px; border-radius: 6px; font: inherit; font-size: 12px; cursor: pointer;
   }
-  button.btn:hover { background: rgba(255,255,255,0.14); }
-  button.btn.primary { background: rgba(100, 130, 255, 0.3); border-color: rgba(120, 150, 255, 0.5); }
+  button.btn:hover { background: rgba(0,0,0,0.12); }
+  button.btn.primary { background: rgba(80, 110, 240, 0.25); border-color: rgba(60, 90, 220, 0.5); }
+  button.btn.danger { background: rgba(200, 40, 40, 0.12); color: #a11; border-color: rgba(200, 40, 40, 0.45); }
+  button.btn.danger:hover { background: rgba(200, 40, 40, 0.2); }
   button.btn.tiny { padding: 3px 8px; font-size: 11px; }
   .btn-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
 
-  #node-detail { background: rgba(255,255,255,0.04); border-radius: 8px; padding: 10px; margin-bottom: 12px; }
+  #node-detail { background: none; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; padding: 10px; margin-bottom: 12px; }
   #node-detail.hidden { display: none; }
   #node-detail .section-title { margin-top: 12px; }
   #node-detail .section-title:first-child { margin-top: 0; }
@@ -149,15 +157,15 @@
   .handle-row label { flex: 0 0 50px; opacity: 0.7; text-transform: uppercase; font-size: 10px; letter-spacing: 0.08em; }
   .handle-row .pair { flex: 1; display: flex; gap: 4px; }
   .handle-row .pair input {
-    flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);
-    color: white; padding: 3px 6px; border-radius: 4px; font: inherit; font-size: 11px;
+    flex: 1; background: rgba(0,0,0,0.06); border: 1px solid rgba(0,0,0,0.15);
+    color: #1a1a1a; padding: 3px 6px; border-radius: 4px; font: inherit; font-size: 11px;
     -moz-appearance: textfield; min-width: 0;
   }
   .handle-row .pair input::-webkit-outer-spin-button, .handle-row .pair input::-webkit-inner-spin-button {
     -webkit-appearance: none; margin: 0;
   }
   .handle-row .reset {
-    background: none; border: none; color: white; opacity: 0.4; cursor: pointer; font-size: 12px; padding: 0 4px;
+    background: none; border: none; color: #1a1a1a; opacity: 0.4; cursor: pointer; font-size: 12px; padding: 0 4px;
   }
   .handle-row .reset:hover { opacity: 1; }
   .handle-row.disabled label { opacity: 0.25; }
@@ -171,20 +179,30 @@
   }
   #export-modal.open, #import-modal.open { display: flex; }
   .modal-card {
-    background: #1a1a26; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px;
+    background: var(--light); color: #1a1a1a; border: 1px solid rgba(0,0,0,0.15); border-radius: 12px;
     padding: 20px; width: min(720px, 90vw); max-height: 80vh; display: flex; flex-direction: column;
   }
   .modal-card h3 { margin: 0 0 12px; font-size: 14px; font-weight: 500; }
   .modal-card textarea {
     flex: 1; min-height: 360px; width: 100%; box-sizing: border-box;
     font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; line-height: 1.5;
-    background: rgba(0,0,0,0.4); color: #c8e0ff; border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(0,0,0,0.04); color: #1a1a1a; border: 1px solid rgba(0,0,0,0.15);
     border-radius: 6px; padding: 12px; resize: vertical;
   }
   .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
 
   .toggle-row { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 6px; }
-  .toggle-row input[type="checkbox"] { accent-color: #6e8eff; }
+  .toggle-row input[type="checkbox"] { accent-color: #1a1a1a; }
+
+  /* Transient toast notification, bottom-center. */
+  #toast {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(10px);
+    background: #1a1a26; color: white; border: 1px solid rgba(255,255,255,0.12);
+    padding: 10px 16px; border-radius: 8px; font-size: 13px; z-index: 200;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
@@ -196,7 +214,7 @@
 
 <aside id="panel">
   <header id="panel-header">
-    <span id="panel-title">Mesh gradient editor</span>
+    <span id="panel-title">Factory for Good gradient editor</span>
   </header>
   <div id="panel-body">
 
@@ -239,7 +257,7 @@
       <div class="row">
         <label>Color</label>
         <select id="n-color-select">
-          <option value="#f7f5f1">white</option>
+          <option value="#f7f5f1">light</option>
           <option value="#bcefff">blue-1</option>
           <option value="#A5D6EA">blue-2</option>
           <option value="#8FBED5">blue-3</option>
@@ -305,13 +323,15 @@
     </div>
   </div>
   <footer id="panel-footer">
-    <button class="btn primary" id="export-btn">Export</button>
-    <button class="btn" id="import-btn">Import</button>
+    <button class="btn" id="export-btn">Export JSON</button>
+    <button class="btn" id="import-btn">Import JSON</button>
     <button class="btn" id="jpg-export-btn">Save JPG</button>
     <button class="btn" id="share-btn" title="Copy a shareable URL for this gradient">Copy share link</button>
-    <button class="btn" id="reset-btn">Reset</button>
+    <button class="btn danger" id="reset-btn">Reset</button>
   </footer>
 </aside>
+
+<div id="toast"></div>
 
 <div id="export-modal">
   <div class="modal-card">
@@ -385,6 +405,17 @@
 
   // ---------- DOM refs ----------
   const $ = id => document.getElementById(id);
+
+  // Transient bottom-center toast. Reuses one element; re-triggering resets the timer.
+  let toastTimer = null;
+  function showToast(msg) {
+    const el = $('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 1800);
+  }
+
   const dragLayer = $('drag-layer');
   const wireframe = $('wireframe');
   const gridPicker = $('grid-picker');
@@ -1019,17 +1050,13 @@ gradient.playIntro();`;
 
   function bindShare() {
     $('share-btn').addEventListener('click', async () => {
-      const btn = $('share-btn');
       try {
         const url = await buildShareUrl();
         await navigator.clipboard.writeText(url);
-        const orig = btn.textContent;
-        btn.textContent = 'Copied — paste anywhere';
-        setTimeout(() => { btn.textContent = orig; }, 1600);
+        showToast('Share link copied — paste anywhere');
       } catch (e) {
         console.error(e);
-        btn.textContent = 'Copy failed';
-        setTimeout(() => { btn.textContent = 'Copy share link'; }, 1600);
+        showToast('Copy failed');
       }
     });
   }
