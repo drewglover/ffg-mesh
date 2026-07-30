@@ -26,12 +26,12 @@
     z-index: 0;
   }
   /* The bounded gradient canvas. WebGL canvas mounts inside this and fills it.
-     Sized at 60% of the stage so introFrom positions at -0.3 / 1.3 land
-     comfortably inside the viewport buffer instead of off-screen. */
+     Its px width/height are set by applyCanvasSize() in JS — a contain-fit of
+     the current canvas aspect ratio (config.width / config.height) into the
+     stage. The values below are just a pre-JS fallback to avoid a 0-size flash. */
   #canvas-frame {
     position: relative;
-    width: 60%; height: auto;
-    aspect-ratio: 16 / 10;
+    width: 60%; aspect-ratio: 16 / 9;
     max-width: 984px; max-height: calc(100vh - 220px);
     border-radius: 14px; overflow: hidden;
     box-shadow:
@@ -242,6 +242,12 @@
     </div>
 
     <div class="section">
+      <div class="section-title">Canvas size <span id="canvas-ar" style="opacity: 0.4; font-weight: 400; text-transform: none; letter-spacing: 0;"></span></div>
+      <div class="row"><label>Width</label><input type="number" id="canvas-w" min="64" max="4096" step="1"></div>
+      <div class="row"><label>Height</label><input type="number" id="canvas-h" min="64" max="4096" step="1"></div>
+    </div>
+
+    <div class="section">
       <div class="section-title">Animation</div>
       <div class="btn-row">
         <button class="btn" id="play-intro">Play intro</button>
@@ -366,8 +372,17 @@
     outroDuration: 1400,
     rows: ROWS,
     cols: COLS,
+    // Export/preview pixel dimensions. Drive both the on-screen canvas-frame
+    // aspect ratio and the JPG (and future SVG) export size.
+    width: 1920,
+    height: 1080,
     vertices: defaultGrid(ROWS, COLS),
   };
+
+  // Guardrails for the canvas-size inputs (WebGL renderbuffers are only
+  // guaranteed up to ~4096px across devices).
+  const CANVAS_MIN = 64, CANVAS_MAX = 4096;
+  const clampCanvas = (n) => Math.max(CANVAS_MIN, Math.min(CANVAS_MAX, Math.round(n)));
 
   let config = structuredClone(defaultConfig);
   let selectedVertexIndex = null;
@@ -768,6 +783,18 @@
     };
     $('bg-color-select').addEventListener('change', onBg);
 
+    // Canvas size: clamped px width/height that drive the frame + export size.
+    const onCanvasSize = (key, id) => (e) => {
+      const raw = parseFloat(e.target.value);
+      if (!Number.isFinite(raw)) { $(id).value = config[key]; return; }
+      config[key] = clampCanvas(raw);
+      $(id).value = config[key];
+      refreshCanvasSize();
+      scheduleHashUpdate();
+    };
+    $('canvas-w').addEventListener('change', onCanvasSize('width', 'canvas-w'));
+    $('canvas-h').addEventListener('change', onCanvasSize('height', 'canvas-h'));
+
     const bindNumeric = (id, key, parse = parseFloat, fmt = (v) => v.toFixed(2)) => {
       const apply = (raw) => {
         const v = parse(raw);
@@ -820,6 +847,8 @@
       outroDuration: config.outroDuration,
       rows: config.rows,
       cols: config.cols,
+      width: config.width,
+      height: config.height,
       vertices: config.vertices.map(v => ({
         color: v.color,
         position: [r(v.position[0], 3), r(v.position[1], 3)],
@@ -851,6 +880,7 @@
       config = structuredClone(defaultConfig);
       selectedVertexIndex = null;
       syncGlobalInputs();
+      applyCanvasSize();
       renderHandles(); renderWireframe(); renderGridPicker(); syncDetailPanel();
       rebuildGradient();
     });
@@ -860,7 +890,7 @@
   function bindJpgExport() {
     $('jpg-export-btn').addEventListener('click', () => {
       try {
-        const dataUrl = gradient.snapshot(1920, 1080, 0.92);
+        const dataUrl = gradient.snapshot(config.width, config.height, 0.92);
         const a = document.createElement('a');
         a.href = dataUrl;
         a.download = 'gradient.jpg';
@@ -904,9 +934,12 @@
         if (parsed.outroDuration != null) config.outroDuration = parsed.outroDuration;
         if (parsed.rows          != null) config.rows          = parsed.rows;
         if (parsed.cols          != null) config.cols          = parsed.cols;
+        if (Number.isFinite(parsed.width))  config.width  = clampCanvas(parsed.width);
+        if (Number.isFinite(parsed.height)) config.height = clampCanvas(parsed.height);
         config.vertices = parsed.vertices;
         selectedVertexIndex = null;
         syncGlobalInputs();
+        applyCanvasSize();
         renderHandles(); renderWireframe(); renderGridPicker(); syncDetailPanel();
         rebuildGradient();
         $('import-modal').classList.remove('open');
@@ -918,12 +951,44 @@
 
   function syncGlobalInputs() {
     $('bg-color-select').value = config.bgColor;
+    $('canvas-w').value = config.width;
+    $('canvas-h').value = config.height;
   }
 
   // ---------- resize handling ----------
-  window.addEventListener('resize', () => {
+  // Contain-fit a box of the current canvas aspect ratio (config.width /
+  // config.height) into the stage's available area, then write explicit px
+  // dimensions onto #canvas-frame. The frame keeps its card feel via a width
+  // cap (matching the old max-width) while any aspect ratio stays undistorted.
+  const FRAME_WIDTH_CAP = 984;
+  function applyCanvasSize() {
+    const stage = $('stage');
+    const cs = getComputedStyle(stage);
+    const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+    const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    const availW = Math.max(1, stage.clientWidth - padX);
+    const availH = Math.max(1, stage.clientHeight - padY);
+    const ar = config.width / config.height;
+    let w = Math.min(availW, FRAME_WIDTH_CAP);
+    let h = w / ar;
+    if (h > availH) { h = availH; w = h * ar; }
+    canvasFrame.style.width = w + 'px';
+    canvasFrame.style.height = h + 'px';
+    canvasFrame.style.aspectRatio = 'auto';
+    const arEl = $('canvas-ar');
+    if (arEl) arEl.textContent = `(${config.width}×${config.height})`;
+  }
+
+  // Re-fit the frame and push the new size through to the gradient + overlays.
+  function refreshCanvasSize() {
+    applyCanvasSize();
+    if (gradient) gradient.resize();
     positionHandles();
     renderWireframe();
+  }
+
+  window.addEventListener('resize', () => {
+    refreshCanvasSize();
   });
 
   // ---------- URL-hash sharing ----------
@@ -942,6 +1007,8 @@
       o: c.outroDuration,
       r: c.rows,
       cols: c.cols,
+      w: c.width,
+      h: c.height,
       v: c.vertices.map(v => ({
         p: v.position,
         c: v.color,
@@ -958,6 +1025,9 @@
       outroDuration:  d.o,
       rows: d.r,
       cols: d.cols,
+      // Older links predate canvas sizing — fall back to the default.
+      width:  d.w ?? defaultConfig.width,
+      height: d.h ?? defaultConfig.height,
       vertices: d.v.map(v => ({
         position: v.p,
         color: v.c,
@@ -1053,6 +1123,7 @@
   bindImport();
   bindJpgExport();
   bindShare();
+  applyCanvasSize();
   renderHandles();
   renderWireframe();
   renderGridPicker();

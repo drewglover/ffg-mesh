@@ -276,6 +276,15 @@ export class MeshGradient {
 
   // ---------- public API ----------
 
+  // Re-read the container size and resize the drawing buffer to match. Call
+  // after the container's dimensions change (e.g. the editor's canvas-size
+  // controls). In a non-animating (idle) state, re-render so the new buffer
+  // isn't left blank until the next frame.
+  resize() {
+    this._resize();
+    if (!this._running) this._render(performance.now());
+  }
+
   playIntro() {
     this.state = 'intro';
     this.stateStart = performance.now();
